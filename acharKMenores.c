@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+//  tentar divisao e conquista
+//  multiplos processos pegam menores de parte do vetor original
+//  apos a finalizção de um deles, utilizar a barreira
+
 //  usage: ./acharKMenores <nTotalElements> <k> <nThreads>
 
 // ENTRADA para o algoritmo:
@@ -19,7 +23,6 @@ typedef struct {
 } pair_t;
 
 static int comp_keys(const void* par1, const void* par2){
-
     if ( ((pair_t *)par1)->key < ((pair_t *)par2)->key ) return -1;
     return 1;
 }
@@ -32,7 +35,6 @@ void verifyOutput( const float *Input,
     // codigo da verificacao a ser incluido por voce
     // voce deve verificar se o conjunto de pares de saida está correto
     // e imprimir uma das mensagens abaixo
-    int ok = 1;
     
     pair_t input_pair[nTotalElmts];
 
@@ -41,11 +43,24 @@ void verifyOutput( const float *Input,
         input_pair[0].key = Input[i];
     }
 
-    ok = 1;
     //!!elementos iguais podem quebrar todo o processo
     qsort(input_pair, nTotalElmts, sizeof(pair_t), comp_keys);
-    for (int i = 0; i < k; i++){
-        for (int j = 0; j < k; j++){
+
+    int x = input_pair[0].val;
+    int num_dif = 1;
+    int compSize = 1;
+    for (int i = 1; i < nTotalElmts; i++){
+        if (x != input_pair[i].val){
+            num_dif++;
+            if (num_dif > k) break;
+            x = input_pair[i].val;
+        }
+        compSize++;
+    }
+
+    int ok = 1;
+    for (int i = 0; i < compSize; i++){
+        for (int j = 0; j < compSize; j++){
             if ( Output[i].val != input_pair[j].val ){
                 ok = 0;
                 break;
