@@ -25,7 +25,7 @@ typedef struct {
 
 #define MAXTHREADS 8
 
-int blockedNode[MAXTHREADS];
+int blockedNodes[MAXTHREADS];
 
 void drawHeapTree( int heap[], int size, int nLevels )   // FIX ME!
 {
@@ -43,7 +43,7 @@ void drawHeapTree( int heap[], int size, int nLevels )   // FIX ME!
            
         }   
         printf( "\n" );
-        
+       
         offset += nElements;
         space = nElements-1;
         nElements *= 2;
@@ -61,6 +61,7 @@ inline void swap( pair_t *a, pair_t *b ) //__attribute__((always_inline));
 
 void maxHeapify(pair_t heap[], int size, int i, int numThreads, int threadId) 
 {
+    int rightBlock, leftBlock, parentBlock;
 
     while (1) {
         int largest = i;
@@ -71,15 +72,15 @@ void maxHeapify(pair_t heap[], int size, int i, int numThreads, int threadId)
         int ok = 1;
         do{
             mtest.lock();
-            int val;
-            for (int j = 0;j < numThreads;j++){
-                val = blockedNode[j]
-                if (i == val | left == val | right == val){
-                    ok = 0;
-                    break;
-                }
-            }
-            if (ok) blockedNode[threadId]=i;
+
+            int rightBlock = blockedNodes[right];
+            int leftBlock = blockedNodes[left];
+            int parentBlock = blockedNodes[i];
+
+            if (parentBlock | leftBlock | rightBlock)
+                ok = 0;
+            else blockedNodes[i]=1;
+
             mtest.unlock();
         } while (!ok);
 
@@ -100,7 +101,9 @@ void maxHeapify(pair_t heap[], int size, int i, int numThreads, int threadId)
     }
 
     mtest.lock();
-    blockedNode[threadId]=-threadId;
+
+    blockedNodes[i] = 0;
+
     mtest.unlock();
 }
 
