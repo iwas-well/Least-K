@@ -15,7 +15,7 @@
 //   cada elemento deve ser um valor float
 // Esse conjunto de entrada, deve ser chamado Input
 
-#define MAX_SIZE 10
+#define MAX_SIZE 100000000
 
 typedef struct {
     float key;   // inserir um valor v float na chave 
@@ -55,6 +55,11 @@ void verifyOutput( const float *Input,
 
     //!!elementos iguais podem quebrar todo o processo
     qsort(input_pair, nTotalElements, sizeof(pair_t), comp_keys);
+
+    printf("solucao:\n");
+    for (int i = 0; i < k; i++)
+        printf("%f ", input_pair[i].key);
+    printf("\n");
 
     int x = input_pair[0].val;
     int num_dif = 1;
@@ -96,6 +101,7 @@ void swap(pair_t *a, pair_t *b) //__attribute__((always_inline));
 void maxHeapify(pair_t heap[], int size, int i) 
 {
     while (1) {
+        printf("i: %d\n", i);
         int largest = i;
         int left = 2 * i + 1;
         int right = 2 * i + 2;
@@ -162,19 +168,21 @@ pair_t* acharKMenores(float* Input, int nTotalElements, int k, int numThreads){
         numThreads--;
     }
 
+    printf("numThreads %d\n", numThreads);
     pair_t* output = malloc(sizeof(pair_t)*k*numThreads);
     pthread_t kMenores_threads[numThreads];
 
     int heap_index;
     int initial_index = 0;
     kmenores_t thread_arguments[numThreads]; 
-    for (int n = 0; n < numThreads-2; n++){
+    for (int n = 0; n < numThreads-1; n++){
         //divide threads
         thread_arguments[n].k = k;
         thread_arguments[n].size = chunk_size;
         thread_arguments[n].Input = Input;
         thread_arguments[n].initial_index = initial_index;
-        thread_arguments[n].heap = output;
+        printf("output%d %p\n",n, &(output[n*k]));
+        thread_arguments[n].heap = &(output[n*k]);
 
         pthread_create( &kMenores_threads[n], NULL, kMenores, (void *)&(thread_arguments[n]) );
         //kMenores(Input, initial_index, chunk_size, &(output[n*k]), k, threadId[n]);
@@ -184,7 +192,8 @@ pair_t* acharKMenores(float* Input, int nTotalElements, int k, int numThreads){
     thread_arguments[numThreads-1].size = chunk_size+remaining_elements;
     thread_arguments[numThreads-1].Input = Input;
     thread_arguments[numThreads-1].initial_index = initial_index;
-    thread_arguments[numThreads-1].heap = output;
+    thread_arguments[numThreads-1].heap = &(output[(numThreads-1)*k]);
+    printf("output%d %p\n",numThreads-1, &(output[(numThreads-1)*k]));
     pthread_create( &kMenores_threads[numThreads-1], NULL, kMenores, (void *)&(thread_arguments[numThreads-1]) );
     //kMenores(Input, initial_index, chunk_size+remaining_elements, \
     //        &(output[(numThreads-1)*k]), k, threadId[numThreads-1]);
@@ -192,10 +201,14 @@ pair_t* acharKMenores(float* Input, int nTotalElements, int k, int numThreads){
     for (int i = 0; i < numThreads; i++)
         pthread_join(kMenores_threads[i], NULL);
 
-    qsort(output, nTotalElements, sizeof(pair_t), comp_keys);
+    printf("qsort\n");
+    qsort(output, k*numThreads, sizeof(pair_t), comp_keys);
+
+    printf("get kmenores\n");
     pair_t* kMenores = malloc(sizeof(pair_t)*k);
     for (int i = 0; i < k; i++)
         kMenores[i] = output[i];
+
     free(output);
    
     return kMenores;
@@ -207,8 +220,9 @@ int main(int argc, char **argv){
     int k = atoi(argv[2]);
     int nThreads = atoi(argv[3]);
 
+    printf("initializa\n");
     // initialize Input vector
-    float Input[MAX_SIZE];
+    float Input[nTotalElements];
     int inputSize = 0;
     for( int i = 0; i < nTotalElements; i++ ){
 
@@ -238,7 +252,13 @@ int main(int argc, char **argv){
     // feitas por segundo no Max-Heap pelo seu algoritmo paralelo para
     // uma dada quantidade de threads.
 
+    printf("achar menores\n");
     pair_t *Output = acharKMenores(Input, nTotalElements, k, nThreads);
+
+    for (int i = 0; i < k; i++)
+        printf("%f ", Output[i].key);
+    printf("\n");
+
     verifyOutput(Input, Output, nTotalElements, k);
 
     // SAIDA do o algoritmo:
