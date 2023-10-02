@@ -3,6 +3,11 @@
 #include <pthread.h>
 #include <bits/pthreadtypes.h>
 
+#include "chrono.c"
+#include <x86intrin.h>
+
+#define ONE_MILLION 1000000
+
 //  tentar divisao e conquista
 //  multiplos processos pegam menores de parte do vetor original
 //  apos a finalizção de um deles, utilizar a barreira
@@ -26,7 +31,7 @@ typedef struct {
 
 typedef struct {
     float *Input;
-    int initial_index;
+    int initial_input_idx;
     int size;
     pair_t *heap;
     int k; 
@@ -46,20 +51,20 @@ void verifyOutput( const float *Input,
     // voce deve verificar se o conjunto de pares de saida está correto
     // e imprimir uma das mensagens abaixo
     
-    pair_t input_pair[nTotalElements];
+    pair_t *input_pair=(pair_t *)malloc(sizeof(pair_t)*nTotalElements);
 
+    //printf("input_pair:%p\n", input_pair);
     for (int i = 0; i < nTotalElements; i++){
-        input_pair[0].val = i;
-        input_pair[0].key = Input[i];
+        input_pair[i].val = i;
+        //printf("i:%d\n", i);
+        //printf("input_pair[i].val:%d\n", input_pair[i].val);
+        input_pair[i].key = Input[i];
     }
+
 
     //!!elementos iguais podem quebrar todo o processo
     qsort(input_pair, nTotalElements, sizeof(pair_t), comp_keys);
 
-    printf("solucao:\n");
-    for (int i = 0; i < k; i++)
-        printf("%f ", input_pair[i].key);
-    printf("\n");
 
     int x = input_pair[0].val;
     int num_dif = 1;
@@ -73,11 +78,21 @@ void verifyOutput( const float *Input,
         compSize++;
     }
 
-    int ok = 1;
+    //printf("output:\n");
+    //for (int i = 0; i < k; i++)
+    //    printf("%f:%d ", Output[i].key, Output[i].val);
+    //printf("\n");
+
+    //printf("sorted Input:\n");
+    //for (int i = 0; i < compSize; i++)
+    //    printf("%f:%d ", input_pair[i].key, input_pair[i].val);
+    //printf("\n");
+
+    int ok = 0;
     for (int i = 0; i < compSize; i++){
         for (int j = 0; j < compSize; j++){
-            if ( Output[i].val != input_pair[j].val ){
-                ok = 0;
+            if ( Output[i].val == input_pair[j].val ){
+                ok = 1;
                 break;
             }
         }
@@ -88,6 +103,7 @@ void verifyOutput( const float *Input,
        printf( "\nOutput set verifyed correctly.\n" );
     else
        printf( "\nOutput set DID NOT compute correctly!!!\n" );   
+    free(input_pair);
 }
 
 
@@ -101,7 +117,7 @@ void swap(pair_t *a, pair_t *b) //__attribute__((always_inline));
 void maxHeapify(pair_t heap[], int size, int i) 
 {
     while (1) {
-        printf("i: %d\n", i);
+        //printf("i: %d\n", i);
         int largest = i;
         int left = 2 * i + 1;
         int right = 2 * i + 2;
@@ -122,114 +138,157 @@ void maxHeapify(pair_t heap[], int size, int i)
     }
 }
 
-void decreaseMax(pair_t heap[], int size, int new_key, int new_value) {
+void decreaseMax(pair_t heap[], int size, float new_key, int new_value) {
     if (size == 0) // Heap is empty
         return;
 
-    if( heap[0].key > new_value ) {
+    //printf("adding newkey:%f new_value:%d\n", new_key, new_value);
+    if( heap[0].key > new_key ) {
       heap[0].key = new_key;
       heap[0].val = new_value;
 
-      #if SHOW_DECREASE_MAX_STEPS 
-         drawHeapTree( heap, size, 4 );
-         printf( "    ~~~~~~~~~~~~~~~~~~~~~~~~~\n" );
-      #endif
+      //#if SHOW_DECREASE_MAX_STEPS 
+      //   drawHeapTree( heap, size, 4 );
+      //   printf( "    ~~~~~~~~~~~~~~~~~~~~~~~~~\n" );
+      //#endif
       maxHeapify(heap, size, 0);
     }  
 
 }
 
 void *kMenores (void *argument) {
-//void kMenores (float Input[], int initial_index, int size, pair_t output[], int k, int threadId) {
     kmenores_t *arg = (kmenores_t *)argument;
-    for (int i = arg->initial_index; i < arg->k; i++){
-        int heap_index = i - arg->initial_index;
-        arg->heap[heap_index].val = i;
-        arg->heap[heap_index].key = arg->Input[i];
+
+    for (int i = 0; i < arg->k; i++){
+        arg->heap[i].val = i+arg->initial_input_idx;
+        arg->heap[i].key = arg->Input[i+arg->initial_input_idx];
     }
+    //printf("heap:\n");
+    //for (int i = 0; i < arg->k; i++)
+    //    printf("%f:%d ", arg->heap[i].key,arg->heap[i].val);
+    //printf("\n\n");
 
     maxHeapify(arg->heap, arg->k, 0);
-    for (int i = arg->k; i < arg->size; i++)
-        decreaseMax(arg->heap, arg->k, arg->Input[i], i);
-
+    for (int i = arg->k; i < arg->size; i++){
+        //printf("adding decrease %f\n", arg->Input[i+arg->initial_input_idx]);
+        //printf("decrease(%p,%d,%f,%d)\n",arg->heap, arg->k, arg->Input[i+arg->initial_input_idx], i+arg->initial_input_idx);
+        decreaseMax(arg->heap, arg->k, arg->Input[i+arg->initial_input_idx], i+arg->initial_input_idx);
+    }
     pthread_exit(NULL);
     return NULL;
+}
+pair_t* acharKMenoresSequencial(float* Input, int nTotalElements, int k, int numThreads){
+    pthread_t kMenores_threads[numThreads];
+    pair_t* result = (pair_t *)malloc(sizeof(pair_t)*k);
+    for (int i = 0; i < k; i++){
+        result[i].val = i;
+        result[i].key = Input[i];
+    }
+    maxHeapify(result, k, 0);
+    for (int i = k; i < nTotalElements; i++)
+        decreaseMax(result, k, Input[i], i);
+
+    return result;
 }
 
 pair_t* acharKMenores(float* Input, int nTotalElements, int k, int numThreads){
 
-    int chunk_size = 0;
-    int remaining_elements = 0;
+    //printf("acharKMenores input:\n");
+    //for (int i = 0; i < nTotalElements; i++)
+    //    printf("%f:%d ", Input[i],i);
+    //printf("\n");
+    //printf("\n");
 
+    int chunk_size = nTotalElements/numThreads;
+    int remaining_elements = nTotalElements%numThreads;
+    //printf("Calculating chunk size\n");
     while (chunk_size < k)
     {
+        numThreads--;
         chunk_size = nTotalElements/numThreads;
         remaining_elements = nTotalElements%numThreads;
-        numThreads--;
     }
-
-    printf("numThreads %d\n", numThreads);
-    pair_t* output = malloc(sizeof(pair_t)*k*numThreads);
+    //printf("chunk size calculated\n");
+    //printf("numThreads %d\n", numThreads);
+    
+    pair_t* output = (pair_t *)malloc(sizeof(pair_t)*k*numThreads);
     pthread_t kMenores_threads[numThreads];
 
     int heap_index;
-    int initial_index = 0;
+    int initial_input_idx = 0;
     kmenores_t thread_arguments[numThreads]; 
     for (int n = 0; n < numThreads-1; n++){
         //divide threads
         thread_arguments[n].k = k;
         thread_arguments[n].size = chunk_size;
         thread_arguments[n].Input = Input;
-        thread_arguments[n].initial_index = initial_index;
-        printf("output%d %p\n",n, &(output[n*k]));
+        thread_arguments[n].initial_input_idx = initial_input_idx+n*chunk_size;
         thread_arguments[n].heap = &(output[n*k]);
 
+        //printf("\nthread %d\n", n);
+        //printf("k:%d\nsize:%d\ninitial Input idx:%d\nheap pointer:%p\n\n", thread_arguments[n].k, thread_arguments[n].size, thread_arguments[n].initial_input_idx, thread_arguments[n].heap);
         pthread_create( &kMenores_threads[n], NULL, kMenores, (void *)&(thread_arguments[n]) );
-        //kMenores(Input, initial_index, chunk_size, &(output[n*k]), k, threadId[n]);
-        initial_index += chunk_size;
     }
     thread_arguments[numThreads-1].k = k;
     thread_arguments[numThreads-1].size = chunk_size+remaining_elements;
     thread_arguments[numThreads-1].Input = Input;
-    thread_arguments[numThreads-1].initial_index = initial_index;
+    thread_arguments[numThreads-1].initial_input_idx = initial_input_idx+(numThreads-1)*chunk_size;
     thread_arguments[numThreads-1].heap = &(output[(numThreads-1)*k]);
-    printf("output%d %p\n",numThreads-1, &(output[(numThreads-1)*k]));
+    //printf("\nthread %d\n", numThreads-1);
+    //printf("k:%d\nsize:%d\ninitial Input idx:%d\nheap pointer:%p\n\n", thread_arguments[numThreads-1].k, thread_arguments[numThreads-1].size, thread_arguments[numThreads-1].initial_input_idx, thread_arguments[numThreads-1].heap);
     pthread_create( &kMenores_threads[numThreads-1], NULL, kMenores, (void *)&(thread_arguments[numThreads-1]) );
-    //kMenores(Input, initial_index, chunk_size+remaining_elements, \
-    //        &(output[(numThreads-1)*k]), k, threadId[numThreads-1]);
-
     for (int i = 0; i < numThreads; i++)
         pthread_join(kMenores_threads[i], NULL);
 
-    printf("qsort\n");
-    qsort(output, k*numThreads, sizeof(pair_t), comp_keys);
+    //printf("before qsort\n");
+    //for (int i = 0; i < k*numThreads; i++)
+    //    printf("%f:%d ", output[i].key,output[i].val);
+    //printf("\n\n");
+    //qsort(output, k*numThreads, sizeof(pair_t), comp_keys);
+    //printf("kmenores:\n");
+    //for (int i = 0; i < k; i++)
+    //    printf("%f:%d ", output[i].key,output[i].val);
+    //printf("\n\n");
+    ////printf("get kmenores\n");
+    //pair_t* kMenores = (pair_t *)malloc(sizeof(pair_t)*k);
+    //for (int i = 0; i < k; i++)
+    //    kMenores[i] = output[i];
 
-    printf("get kmenores\n");
-    pair_t* kMenores = malloc(sizeof(pair_t)*k);
-    for (int i = 0; i < k; i++)
-        kMenores[i] = output[i];
+    pair_t* result = (pair_t *)malloc(sizeof(pair_t)*k);
+    for (int i = 0; i < k; i++){
+        result[i].val = output[i].val;
+        result[i].key = output[i].key;
+    }
+    maxHeapify(result, k, 0);
+    for (int i = k; i < k*numThreads; i++)
+        decreaseMax(result, k, output[i].key, output[i].val);
+
 
     free(output);
-   
-    return kMenores;
+    return result;
 }
 
 int main(int argc, char **argv){
+
+    chronometer_t parallelReductionTime;
+
+    if (argc != 4){
+        fprintf(stderr,"ERRO: número de paramêtros incorreto\n");
+        return 1;
+    }
 
     int nTotalElements = atoi(argv[1]);
     int k = atoi(argv[2]);
     int nThreads = atoi(argv[3]);
 
-    printf("initializa\n");
     // initialize Input vector
-    float Input[nTotalElements];
+    float *Input=(float *)malloc(sizeof(pair_t)*nTotalElements);
+    //printf("initializing input array\n");
     int inputSize = 0;
     for( int i = 0; i < nTotalElements; i++ ){
 
-        int a = rand();  // Returns a pseudo-random integer
-                         //    between 0 and RAND_MAX.
+        int a = rand();  // Returns a pseudo-random integer between 0 and RAND_MAX.
         int b = rand();  // same as above
-
         float v = a * 100.0 + b;
         int p = inputSize;
 
@@ -237,34 +296,37 @@ int main(int argc, char **argv){
         Input[ p ] = v;
         ++inputSize;
     }
+    //printf("Input:\n");
+    //for (int i = 0; i < nTotalElements; i++)
+    //    printf("%f:%d ", Input[i],i);
+    //printf("\n\n");
     pthread_mutex_t *mutex;
 
-    //o programa deve calcular e imprimir 
-    //  o tempo e a vazão do algoritmo acharKMenores usando
-    //  a inicializacao de um Max-Heap de tamanho K
-    //  a VERSÂO 1 do algoritmo usando a operação decreaseMAX
-    //  e as idéias descritas
-    //  no arquivo : 
-    //    max-heap-descricao-e-examplos.pdf
-    //
-    // A vazão deve ser reportada em MOPs (Mega Operacoes por segundo)
-    // que é o numero de operações de insersão+decreaseMax
-    // feitas por segundo no Max-Heap pelo seu algoritmo paralelo para
-    // uma dada quantidade de threads.
-
-    printf("achar menores\n");
-    pair_t *Output = acharKMenores(Input, nTotalElements, k, nThreads);
-
-    for (int i = 0; i < k; i++)
-        printf("%f ", Output[i].key);
-    printf("\n");
-
+    pair_t *Output;
+    if (nThreads > 0){
+        chrono_reset( &parallelReductionTime );
+        chrono_start( &parallelReductionTime );
+        Output = acharKMenores(Input, nTotalElements, k, nThreads);
+        chrono_stop( &parallelReductionTime );
+    }
+    else{
+        chrono_reset( &parallelReductionTime );
+        chrono_start( &parallelReductionTime );
+        Output = acharKMenoresSequencial(Input, nTotalElements, k, nThreads);
+        chrono_stop( &parallelReductionTime );
+    }
     verifyOutput(Input, Output, nTotalElements, k);
 
-    // SAIDA do o algoritmo:
-    // A saída da função acharKMenores será: 
-    //   um conjunto de k elementos do tipo (chave, valor)
-    //   conforme especificado acima,
-    //   esse conjunto de saída deve ser chamado de Output
+    //chrono_reportTime( &parallelReductionTime, "parallelReductionTime" );
+    // calcular e imprimir a VAZAO (numero de operacoes/s)
+    double total_time_in_seconds = (double) chrono_gettotal( &parallelReductionTime ) /
+                                      ((double)1000*1000*1000);
+    printf( "Total_time_in_seconds: %lf s\n", total_time_in_seconds );
+                                  
+    double mop = ((double)nTotalElements * (1 + k))/ONE_MILLION;
+    double mops = mop/total_time_in_seconds;
+    printf( "Throughput: %lf MOP/s\n", mops );
+    free(Input);
+
     return 0;
 }
