@@ -2,7 +2,7 @@
 all: acharKMenores
 
 acharKMenores: acharKMenores.c 
-	g++ acharKMenores.c -o acharKMenores
+	g++ -O3 -pthread acharKMenores.c -o acharKMenores
 
 .PHONY: clean
 clean: 
