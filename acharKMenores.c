@@ -125,7 +125,6 @@ void decreaseMax(pair_t heap[], int size, float new_key, int new_value) {
     heap[0].key = new_key;
     heap[0].val = new_value;
     maxHeapify(heap, size, 0);
-
     //os testes foram movidos para fora da funcao
     //-- if (size == 0) // Heap is empty
     //--    return;
@@ -212,13 +211,12 @@ pair_t* acharKMenores(float* Input, int nTotalElements, int k, int numThreads){
     //espera conclusao de todas as threads
     for (int i = 0; i < numThreads; i++)
         pthread_join(kMenores_threads[i], NULL);
-
     //for (int i = 0; i < k*numThreads; i++)
     //    printf("%f:%d ", output[i].key,output[i].val);
     //printf("\n\n");
     
     //coloca nos k primeiros elementos do vetor output os menores
-    //valores dos numThread heaps criadas anteriormente
+    //valores das numThread heaps criadas anteriormente
     for (int i = k; i < k*numThreads; i++)
         if (output[0].key > output[i].key)
             decreaseMax(output, k, output[i].key, output[i].val);
